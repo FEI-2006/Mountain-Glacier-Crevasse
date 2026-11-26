@@ -21,6 +21,11 @@ image ─► ResNet-50 ─► ASPP ─► DSConv ─► D-LKA ─► VMC ─┐
 | **VMC** – VMamba-style Context | four-direction (left/right/up/down) selective state-space scan for long-range context |
 
 Each module keeps the 256-channel feature shape and has a residual connection.
+
+`ddv/dsconv.py` fixes a batch-indexing error in the upstream DSConv sampler: in
+`DSC._bilinear_interpolate_3D` the gather indices subtracted the per-sample offset, so every
+image in a batch read its sampled neighbours from the first image of the batch. The indices
+now keep that offset, and each image samples only its own features.
 VMC is our own pure-PyTorch block inspired by VMamba (Liu et al., 2024); it is not the
 official VMamba code and needs no `mamba_ssm`/Triton kernels, so it also runs on Windows.
 
@@ -29,10 +34,10 @@ official VMamba code and needs no `mamba_ssm`/Triton kernels, so it also runs on
 ```
 ddv/model.py           DDV-DeepLabV3+ (ResNet-50 backbone, ASPP, DDV context chain, decoder)
 ddv/context_blocks.py  DSConv, D-LKA and VMC blocks
-ddv/dsconv.py          Dynamic Snake Convolution (upstream implementation, unchanged)
+ddv/dsconv.py          Dynamic Snake Convolution (upstream implementation, batch-indexing fix)
 train.py               training
 predict.py             prediction on image tiles
-tools/smoke_test.py    builds the model and runs one forward/backward pass
+tools/smoke_test.py    checks DSConv batch indexing, builds the model and runs one forward/backward pass
 ```
 
 ## Installation

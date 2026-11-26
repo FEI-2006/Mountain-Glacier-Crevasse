@@ -1,6 +1,10 @@
-# Dynamic Snake Convolution, unchanged upstream implementation from
+# Dynamic Snake Convolution, upstream implementation from
 # https://github.com/YaoleiQi/DSCNet (Qi et al., ICCV 2023), MIT License.
 # See THIRD_PARTY_NOTICES.md.
+# One change from upstream: in DSC._bilinear_interpolate_3D the per-sample batch
+# offset ``base`` is kept in the gather indices. Upstream computes
+# ``base_y0 - base + x0``, which cancels the offset, so every sample in a batch
+# with more than one image reads its neighbours from the first image.
 # -*- coding: utf-8 -*-
 import os
 import torch
@@ -293,12 +297,14 @@ class DSC(object):
         base_y1 = base + y1 * self.height
 
         # top rectangle of the neighbourhood volume
-        index_a0 = base_y0 - base + x0
-        index_c0 = base_y0 - base + x1
+        # (base, the offset of each sample in the flattened batch, is kept here;
+        # upstream subtracted it again, so all samples read from the first one)
+        index_a0 = base_y0 + x0
+        index_c0 = base_y0 + x1
 
         # bottom rectangle of the neighbourhood volume
-        index_a1 = base_y1 - base + x0
-        index_c1 = base_y1 - base + x1
+        index_a1 = base_y1 + x0
+        index_c1 = base_y1 + x1
 
         # get 8 grid values
         value_a0 = input_feature_flat[index_a0.type(torch.int64)].to(self.device)
