@@ -30,9 +30,40 @@ def check_dsconv_batch_indexing(device):
     print("DSConv batch indexing: each sample reads its own features.")
 
 
+def check_dsconv_offset_chain(device):
+    """Offsets accumulate from the kernel centre out to both ends, and every
+    non-centre offset channel receives a gradient.
+
+    With all offsets set to 0.5 and kernel size 5, the five sampling points must be
+    shifted by 1.0, 0.5, 0, 0.5 and 1.0 (centre fixed, then accumulated outwards).
+    """
+    k, width, height = 5, 4, 3
+    expected = torch.tensor([1.0, 0.5, 0.0, 0.5, 1.0])
+    others = torch.arange(k) != k // 2
+    for morph in (0, 1):
+        offset = torch.full((2, 2 * k, width, height), 0.5, device=device, requires_grad=True)
+        dsc = DSC(offset.shape, kernel_size=k, extend_scope=1, morph=morph, device=device)
+        y, x = dsc._coordinate_map_3D(offset, True)
+        if morph == 0:  # vertical swing of a horizontal kernel
+            moved = y
+            shift = y.reshape(2, width, k, height) - torch.arange(width, device=device).view(1, -1, 1, 1)
+            got = shift[0, 0, :, 0]
+        else:  # horizontal swing of a vertical kernel
+            moved = x
+            shift = x.reshape(2, width, height, k) - torch.arange(height, device=device).view(1, 1, -1, 1)
+            got = shift[0, 0, 0, :]
+        assert torch.allclose(got.detach().cpu(), expected), f"morph {morph}: offsets {got.tolist()}"
+        moved.sum().backward()
+        grad = offset.grad[:, :k] if morph == 0 else offset.grad[:, k:]
+        grad = grad.abs().sum(dim=(0, 2, 3)).cpu()
+        assert (grad[others] > 0).all(), f"morph {morph}: offset channels without gradient {grad.tolist()}"
+    print("DSConv offsets: accumulated to both kernel ends, all offset channels receive gradients.")
+
+
 def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     check_dsconv_batch_indexing(device)
+    check_dsconv_offset_chain(device)
     model = build_model(num_classes=2, output_stride=16, pretrained_backbone=False).to(device)
     x = torch.randn(2, 3, 256, 256, device=device)
     y = model(x)

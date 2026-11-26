@@ -1,10 +1,15 @@
 # Dynamic Snake Convolution, upstream implementation from
 # https://github.com/YaoleiQi/DSCNet (Qi et al., ICCV 2023), MIT License.
 # See THIRD_PARTY_NOTICES.md.
-# One change from upstream: in DSC._bilinear_interpolate_3D the per-sample batch
-# offset ``base`` is kept in the gather indices. Upstream computes
-# ``base_y0 - base + x0``, which cancels the offset, so every sample in a batch
-# with more than one image reads its neighbours from the first image.
+# Two changes from upstream:
+# 1. DSC._coordinate_map_3D accumulates the offsets out to both ends of the kernel
+#    (range(1, center + 1)). Upstream stops one step early (range(1, center)), so the
+#    two outermost points keep their raw, detached offsets: they are not chained to
+#    their neighbours and their offset channels receive no gradient.
+# 2. In DSC._bilinear_interpolate_3D the per-sample batch offset ``base`` is kept in
+#    the gather indices. Upstream computes ``base_y0 - base + x0``, which cancels the
+#    offset, so every sample in a batch with more than one image reads its
+#    neighbours from the first image.
 # -*- coding: utf-8 -*-
 import os
 import torch
@@ -169,7 +174,8 @@ class DSC(object):
                 # The center position remains unchanged and the rest of the positions begin to swing
                 # This part is quite simple. The main idea is that "offset is an iterative process"
                 y_offset_new[center] = 0
-                for index in range(1, center):
+                # accumulate out to both ends of the kernel (upstream stopped one step early)
+                for index in range(1, center + 1):
                     y_offset_new[center + index] = (y_offset_new[center + index - 1] + y_offset[center + index])
                     y_offset_new[center - index] = (y_offset_new[center - index + 1] + y_offset[center - index])
                 y_offset_new = y_offset_new.permute(1, 0, 2, 3).to(self.device)
@@ -229,7 +235,8 @@ class DSC(object):
                 x_offset_new = x_offset_new.permute(1, 0, 2, 3)
                 center = int(self.num_points // 2)
                 x_offset_new[center] = 0
-                for index in range(1, center):
+                # accumulate out to both ends of the kernel (upstream stopped one step early)
+                for index in range(1, center + 1):
                     x_offset_new[center + index] = (x_offset_new[center + index - 1] + x_offset[center + index])
                     x_offset_new[center - index] = (x_offset_new[center - index + 1] + x_offset[center - index])
                 x_offset_new = x_offset_new.permute(1, 0, 2, 3).to(self.device)

@@ -27,7 +27,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## DSCNet - Dynamic Snake Convolution (ddv/dsconv.py, with a batch-indexing fix in `DSC._bilinear_interpolate_3D`)
+## DSCNet - Dynamic Snake Convolution (ddv/dsconv.py, with two fixes: offset accumulation in `DSC._coordinate_map_3D` and batch indexing in `DSC._bilinear_interpolate_3D`)
 https://github.com/YaoleiQi/DSCNet — Qi et al., "Dynamic Snake Convolution based on Topological Geometric Constraints for Tubular Structure Segmentation", ICCV 2023.
 
 ```
